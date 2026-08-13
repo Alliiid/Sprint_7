@@ -6,6 +6,7 @@ import io.qameta.allure.Step;
 import io.qameta.allure.junit4.DisplayName;
 import model.Courier;
 import model.CourierCredentials;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,7 +30,6 @@ public class LoginCourierTest {
 
         try {
             courierClient.createCourier(testCourier);
-            sleep(500);
             var loginResponse = courierClient.loginCourier(
                     new CourierCredentials(testCourier.getLogin(), testCourier.getPassword())
             );
@@ -46,18 +46,9 @@ public class LoginCourierTest {
         if (courierId > 0) {
             try {
                 courierClient.deleteCourier(courierId);
-                sleep(300);
             } catch (Exception e) {
                 System.out.println("Не удалось удалить курьера: " + e.getMessage());
             }
-        }
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -65,7 +56,9 @@ public class LoginCourierTest {
         try {
             var response = courierClient.createCourier(CourierGenerator.getRandomCourier());
             int statusCode = response.statusCode();
-            return statusCode == 201 || statusCode == 409 || statusCode == 400;
+            return statusCode == HttpStatus.SC_CREATED ||
+                    statusCode == HttpStatus.SC_CONFLICT ||
+                    statusCode == HttpStatus.SC_BAD_REQUEST;
         } catch (Exception e) {
             return false;
         }
@@ -78,14 +71,11 @@ public class LoginCourierTest {
         assumeTrue("Сервер недоступен или курьер не создан, тест пропущен",
                 isServerAvailable() && courierId > 0);
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), testCourier.getPassword())
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 200", 200, statusCode);
+        assertEquals("Статус код должен быть 200", HttpStatus.SC_OK, response.statusCode());
         int id = response.jsonPath().getInt("id");
         assertTrue("ID должен быть положительным", id > 0);
     }
@@ -96,14 +86,11 @@ public class LoginCourierTest {
     public void testLoginWithoutLogin() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials(null, testCourier.getPassword())
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 400", 400, statusCode);
+        assertEquals("Статус код должен быть 400", HttpStatus.SC_BAD_REQUEST, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о недостаточности данных",
                 message.contains("Недостаточно данных для входа"));
@@ -115,14 +102,11 @@ public class LoginCourierTest {
     public void testLoginWithoutPassword() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), null)
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 400", 400, statusCode);
+        assertEquals("Статус код должен быть 400", HttpStatus.SC_BAD_REQUEST, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о недостаточности данных",
                 message.contains("Недостаточно данных для входа"));
@@ -134,14 +118,11 @@ public class LoginCourierTest {
     public void testLoginWithWrongLogin() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials("wrong_login_123", testCourier.getPassword())
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 404", 404, statusCode);
+        assertEquals("Статус код должен быть 404", HttpStatus.SC_NOT_FOUND, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о ненайденной учетной записи",
                 message.contains("Учетная запись не найдена"));
@@ -153,14 +134,11 @@ public class LoginCourierTest {
     public void testLoginWithWrongPassword() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), "wrong_password_123")
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 404", 404, statusCode);
+        assertEquals("Статус код должен быть 404", HttpStatus.SC_NOT_FOUND, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о ненайденной учетной записи",
                 message.contains("Учетная запись не найдена"));
@@ -172,14 +150,11 @@ public class LoginCourierTest {
     public void testLoginNonExistentUser() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials("nonexistent_user_123", "password123")
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 404", 404, statusCode);
+        assertEquals("Статус код должен быть 404", HttpStatus.SC_NOT_FOUND, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о ненайденной учетной записи",
                 message.contains("Учетная запись не найдена"));
@@ -191,14 +166,11 @@ public class LoginCourierTest {
     public void testLoginWithEmptyLogin() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials("", testCourier.getPassword())
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 400", 400, statusCode);
+        assertEquals("Статус код должен быть 400", HttpStatus.SC_BAD_REQUEST, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о недостаточности данных",
                 message.contains("Недостаточно данных для входа"));
@@ -210,14 +182,11 @@ public class LoginCourierTest {
     public void testLoginWithEmptyPassword() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), "")
         );
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 400", 400, statusCode);
+        assertEquals("Статус код должен быть 400", HttpStatus.SC_BAD_REQUEST, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о недостаточности данных",
                 message.contains("Недостаточно данных для входа"));

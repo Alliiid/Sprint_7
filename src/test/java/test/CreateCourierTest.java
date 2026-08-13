@@ -6,6 +6,7 @@ import io.qameta.allure.Step;
 import io.qameta.allure.junit4.DisplayName;
 import model.Courier;
 import model.CourierCredentials;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,7 +26,6 @@ public class CreateCourierTest {
     public void setUp() {
         courierClient = new CourierClient();
         testCourier = CourierGenerator.getRandomCourier();
-        sleep(500);
     }
 
     @After
@@ -34,18 +34,9 @@ public class CreateCourierTest {
         if (courierId > 0) {
             try {
                 courierClient.deleteCourier(courierId);
-                sleep(300);
             } catch (Exception e) {
                 System.out.println("Не удалось удалить курьера: " + e.getMessage());
             }
-        }
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -53,7 +44,9 @@ public class CreateCourierTest {
         try {
             var response = courierClient.createCourier(CourierGenerator.getRandomCourier());
             int statusCode = response.statusCode();
-            return statusCode == 201 || statusCode == 409 || statusCode == 400;
+            return statusCode == HttpStatus.SC_CREATED ||
+                    statusCode == HttpStatus.SC_CONFLICT ||
+                    statusCode == HttpStatus.SC_BAD_REQUEST;
         } catch (Exception e) {
             return false;
         }
@@ -65,15 +58,11 @@ public class CreateCourierTest {
     public void testCreateCourierSuccess() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         var response = courierClient.createCourier(testCourier);
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 201", 201, statusCode);
+        assertEquals("Статус код должен быть 201", HttpStatus.SC_CREATED, response.statusCode());
         assertTrue("Ответ должен содержать ok: true", response.jsonPath().getBoolean("ok"));
 
-        sleep(500);
         var loginResponse = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), testCourier.getPassword())
         );
@@ -87,17 +76,13 @@ public class CreateCourierTest {
     public void testCreateDuplicateCourier() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         courierClient.createCourier(testCourier);
-        sleep(500);
 
         var loginResponse = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), testCourier.getPassword())
         );
         courierId = loginResponse.jsonPath().getInt("id");
 
-        sleep(500);
         Courier duplicateCourier = new Courier(
                 testCourier.getLogin(),
                 "AnotherPassword123!",
@@ -106,8 +91,7 @@ public class CreateCourierTest {
 
         var response = courierClient.createCourier(duplicateCourier);
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 409", 409, statusCode);
+        assertEquals("Статус код должен быть 409", HttpStatus.SC_CONFLICT, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о существующем логине",
                 message.contains("Этот логин уже используется"));
@@ -122,13 +106,10 @@ public class CreateCourierTest {
         String[] missingFields = {"login", "password"};
 
         for (String field : missingFields) {
-            sleep(500);
-
             Courier invalidCourier = CourierGenerator.getCourierWithMissingField(field);
             var response = courierClient.createCourier(invalidCourier);
 
-            int statusCode = response.statusCode();
-            assertEquals("Статус код должен быть 400", 400, statusCode);
+            assertEquals("Статус код должен быть 400", HttpStatus.SC_BAD_REQUEST, response.statusCode());
             String message = response.jsonPath().getString("message");
             assertTrue("Должна быть ошибка о недостающих полях",
                     message.contains("Недостаточно данных для создания учетной записи"));
@@ -141,16 +122,12 @@ public class CreateCourierTest {
     public void testCreateCourierWithoutFirstName() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         Courier courierWithoutName = CourierGenerator.getCourierWithMissingField("firstName");
         var response = courierClient.createCourier(courierWithoutName);
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 201", 201, statusCode);
+        assertEquals("Статус код должен быть 201", HttpStatus.SC_CREATED, response.statusCode());
         assertTrue("Ответ должен содержать ok: true", response.jsonPath().getBoolean("ok"));
 
-        sleep(500);
         var loginResponse = courierClient.loginCourier(
                 new CourierCredentials(courierWithoutName.getLogin(), courierWithoutName.getPassword())
         );
@@ -163,17 +140,13 @@ public class CreateCourierTest {
     public void testCreateCourierWithExistingLogin() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         courierClient.createCourier(testCourier);
-        sleep(500);
 
         var loginResponse = courierClient.loginCourier(
                 new CourierCredentials(testCourier.getLogin(), testCourier.getPassword())
         );
         courierId = loginResponse.jsonPath().getInt("id");
 
-        sleep(500);
         Courier sameLoginCourier = new Courier(
                 testCourier.getLogin(),
                 "DifferentPass123!",
@@ -182,8 +155,7 @@ public class CreateCourierTest {
 
         var response = courierClient.createCourier(sameLoginCourier);
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 409", 409, statusCode);
+        assertEquals("Статус код должен быть 409", HttpStatus.SC_CONFLICT, response.statusCode());
         String message = response.jsonPath().getString("message");
         assertTrue("Должна быть ошибка о существующем логине",
                 message.contains("Этот логин уже используется"));
@@ -195,8 +167,6 @@ public class CreateCourierTest {
     public void testCreateCourierWithMinimumFields() {
         assumeTrue("Сервер недоступен, тест пропущен", isServerAvailable());
 
-        sleep(500);
-
         Courier minimalCourier = new Courier(
                 "minimal_" + System.currentTimeMillis(),
                 "password123",
@@ -205,11 +175,9 @@ public class CreateCourierTest {
 
         var response = courierClient.createCourier(minimalCourier);
 
-        int statusCode = response.statusCode();
-        assertEquals("Статус код должен быть 201", 201, statusCode);
+        assertEquals("Статус код должен быть 201", HttpStatus.SC_CREATED, response.statusCode());
         assertTrue("Ответ должен содержать ok: true", response.jsonPath().getBoolean("ok"));
 
-        sleep(500);
         var loginResponse = courierClient.loginCourier(
                 new CourierCredentials(minimalCourier.getLogin(), minimalCourier.getPassword())
         );
